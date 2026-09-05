@@ -1,58 +1,79 @@
-import { NextResponse } from 'next/server';
+mport { NextResponse } from "next/server";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export async function POST(request) {
   try {
     const formData = await request.formData();
-    const image = formData.get('image');
-    const prompt = formData.get('prompt');
-    const duration = formData.get('duration') || '5';
+
+    const image = formData.get("image");
+    const prompt = formData.get("prompt");
+    const duration = Number(formData.get("duration") || 5);
 
     if (!image || !prompt) {
       return NextResponse.json(
-        { error: 'Image and prompt are required.' },
+        { error: "Image and prompt are required." },
         { status: 400 }
       );
     }
 
-    /*
-      CONNECT YOUR VIDEO MODEL/API HERE.
+    const apiKey = process.env.RUNWAYML_API_SECRET;
 
-      Generic flow:
-      1. Upload the image to your provider or object storage.
-      2. Send image URL/file + prompt + duration to the video model.
-      3. Poll the provider until the generation job finishes.
-      4. Return the final MP4 URL:
-         return NextResponse.json({ videoUrl: finalVideoUrl });
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Runway API key is not configured." },
+        { status: 500 }
+      );
+    }
 
-      Keep API keys only on the server, for example:
-      VIDEO_API_KEY=your_key_here
+    const arrayBuffer = await image.arrayBuffer();
+    const base64Image = Buffer.from(arrayBuffer).toString("base64");
+    const dataUri = data:${image.type};base64,${base64Image};
 
-      This starter intentionally does not hard-code a specific provider,
-      so you can connect the service/model you prefer.
-    */
+    const runwayResponse = await fetch(
+      "https://api.dev.runwayml.com/v1/image_to_video",
+      {
+        method: "POST",
+        headers: {
+          Authorization: Bearer ${apiKey},
+          "Content-Type": "application/json",
+          "X-Runway-Version": "2024-11-06",
+        },
+        body: JSON.stringify({
+          model: "gen4.5",
+          promptImage: dataUri,
+          promptText: prompt,
+          ratio: "1280:720",
+          duration: duration,
+        }),
+      }
+    );
 
-    // Demo response so the interface can be tested immediately.
-    // Replace this URL with the generated result from your AI video provider.
-    const demoVideo =
-      'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+    const result = await runwayResponse.json();
 
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (!runwayResponse.ok) {
+      console.error("Runway error:", result);
+
+      return NextResponse.json(
+        {
+          error:
+            result?.error ||
+            result?.message ||
+            "Runway could not start the video generation.",
+        },
+        { status: runwayResponse.status }
+      );
+    }
 
     return NextResponse.json({
-      videoUrl: demoVideo,
-      demo: true,
-      received: {
-        fileName: image.name,
-        prompt,
-        duration
-      }
+      taskId: result.id,
+      status: "started",
     });
   } catch (error) {
-    console.error(error);
+    console.error("Generate error:", error);
+
     return NextResponse.json(
-      { error: 'Unable to generate the video.' },
+      { error: "Unable to start video generation." },
       { status: 500 }
     );
   }
