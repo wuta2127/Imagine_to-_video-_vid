@@ -21,37 +21,73 @@ export default function Home() {
   }
 
   async function generateVideo() {
-    if (!image || !prompt.trim()) {
-      setError('Please upload an image and enter a prompt.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setVideoUrl('');
-
-    const form = new FormData();
-    form.append('image', image);
-    form.append('prompt', prompt);
-    form.append('duration', duration);
-
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        body: form
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed.');
-
-      setVideoUrl(data.videoUrl);
-    } catch (err) {
-      setError(err.message || 'Something went wrong.');
-    } finally {
-      setLoading(false);
-    }
+  if (!image || !prompt.trim()) {
+    setError("Please upload an image and enter a prompt.");
+    return;
   }
 
+  setLoading(true);
+  setError("");
+  setVideoUrl("");
+
+  const form = new FormData();
+  form.append("image", image);
+  form.append("prompt", prompt);
+  form.append("duration", duration);
+
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      body: form,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Generation failed.");
+    }
+
+    if (!data.taskId) {
+      throw new Error("No Runway task ID was returned.");
+    }
+
+    const taskId = data.taskId;
+
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      const statusRes = await fetch(`/api/status/${taskId}`, {
+        cache: "no-store",
+      });
+
+      const statusData = await statusRes.json();
+
+      if (!statusRes.ok) {
+        throw new Error(statusData.error || "Unable to check video status.");
+      }
+
+      if (statusData.status === "SUCCEEDED") {
+        if (!statusData.videoUrl) {
+          throw new Error("Runway finished, but no video URL was returned.");
+        }
+
+        setVideoUrl(statusData.videoUrl);
+        break;
+      }
+
+      if (
+        statusData.status === "FAILED" ||
+        statusData.status === "CANCELED"
+      ) {
+        throw new Error(statusData.error || "Video generation failed.");
+      }
+    }
+  } catch (err) {
+    setError(err.message || "Something went wrong.");
+  } finally {
+    setLoading(false);
+  }
+}
   return (
     <main className="page">
       <section className="hero">
