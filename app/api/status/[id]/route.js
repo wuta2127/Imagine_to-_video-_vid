@@ -23,11 +23,11 @@ export async function GET(request, { params }) {
     }
 
     const runwayResponse = await fetch(
-      https://api.dev.runwayml.com/v1/tasks/${id},
+      `https://api.dev.runwayml.com/v1/tasks/${id}`,
       {
         method: "GET",
         headers: {
-          Authorization: Bearer ${apiKey},
+          Authorization: `Bearer ${apiKey}`,
           "X-Runway-Version": "2024-11-06",
         },
         cache: "no-store",
@@ -57,21 +57,29 @@ export async function GET(request, { params }) {
       });
     }
 
-    if (result.status === "FAILED" || result.status === "CANCELED") {
+    if (
+      result.status === "FAILED" ||
+      result.status === "CANCELED"
+    ) {
       return NextResponse.json({
         status: result.status,
-        error: result.failure || "Video generation failed.",
+        error:
+          result.failure ||
+          "Video generation failed.",
       });
     }
 
     return NextResponse.json({
       status: result.status,
+      videoUrl: null,
     });
   } catch (error) {
-    console.error("Status error:", error);
+    console.error("Status route error:", error);
 
     return NextResponse.json(
-      { error: "Unable to check video status." },
+      {
+        error: "Unable to check video generation status.",
+      },
       { status: 500 }
     );
   }
